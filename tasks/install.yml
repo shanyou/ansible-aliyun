@@ -1,0 +1,107 @@
+---
+- name: check mount point
+  set_fact:
+    mount_points: "{{ansible_mounts|map(attribute='mount')|list}}"
+
+- name: fdisk
+  script: auto_fdisk.sh {{mount_device}} {{mount_point}}
+  register: fdisk
+  when: "'{{ mount_point }}' not in mount_points and mount_device_exists"
+
+# change sudo
+- name: Check whether /etc/sudoers enable sudo"
+  command: grep -q "#\s*%wheel\s\+ALL=(ALL)" /etc/sudoers
+  register: sudoNex
+  always_run: True
+  ignore_errors: True
+  changed_when: False
+
+- name: change sudo
+  script: change_sudo.sh
+  when: sudoNex.rc != 0
+
+- name: hostname should match inventory name
+  hostname: name={{ inventory_hostname }}
+
+- name: Creates workdir
+  file: path={{work_dir}} state=directory
+
+# the best method is use internal dns for private network access
+- name: remove default hostname in hosts with aliyun defined
+  lineinfile:
+    dest=/etc/hosts
+    regexp='iZ2*'
+    state=absent
+
+- name: add custom dns resolver
+  lineinfile:
+    dest=/etc/resolv.conf
+    insertbefore=BOF
+    state=present
+    line="nameserver {{ internal_dns }}"
+  when: internal_dns is defined
+
+- name: add all host to /etc/hosts
+  lineinfile:
+    dest=/etc/hosts
+    regexp='.*{{ item }}$'
+    line="{{ hostvars[item]['inner_ip']}} {{item}}" state=present
+  with_items: groups['all']
+  when: enable_hosts
+
+# makesure eth0 zone trusted for firewalld
+- name: get internal network status
+  stat: path=/etc/sysconfig/network-scripts/ifcfg-{{ private_nc }}
+  register: eth0cfg
+
+- name: make eth0 zone trusted
+  lineinfile:
+    dest=/etc/sysconfig/network-scripts/ifcfg-{{ private_nc }}
+    state=present
+    line="ZONE=trusted"
+  when: eth0cfg.stat.exists
+
+
+# makesure eth0 zone trusted for firewalld
+- name: get internal network status
+  stat: path=/etc/sysconfig/network-scripts/ifcfg-{{ public_nc }}
+  register: eth1cfg
+
+- name: make eth1 zone public
+  lineinfile:
+    dest=/etc/sysconfig/network-scripts/ifcfg-{{ public_nc }}
+    state=present
+    line="ZONE=public"
+  when: eth1cfg.stat.exists
+
+- block:
+  #firewall conf
+  - name: enable firewalld
+    service: name=firewalld enabled=yes
+
+  - name: start firewalld
+    service: name=firewalld state=started
+
+  - name: add trusted ips
+    command: firewall-cmd --zone=trusted --add-source={{item}}/32 --permanent
+    ignore_errors: true
+    with_items: trusted_ips
+
+  - name: add trusted eth0
+    command: firewall-cmd --zone=trusted --add-interface=eth0 --permanent
+
+  - name: add public eth1
+    command: firewall-cmd --zone=public --add-interface=eth1 --permanent
+
+  - name: restart network service
+    service: name=network state=restarted
+
+  - name: restart firewall service
+    service: name=firewalld state=reloaded
+  when: firewall_enable
+
+- name: Creates local facts dir
+  file: path=/etc/ansible/facts.d state=directory
+
+- name: Install common fact
+  copy: content="{{ common_info }}" dest=/etc/ansible/facts.d/common.fact

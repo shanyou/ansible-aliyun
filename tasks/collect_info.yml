@@ -1,0 +1,9 @@
+---
+- name: Check mount_device exists
+  stat: path={{mount_device}}
+  register: sym
+
+- name: Set exists variable
+  set_fact:
+    mount_device_exists: True
+  when: sym.stat.exists

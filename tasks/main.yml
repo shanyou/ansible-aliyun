@@ -1,0 +1,6 @@
+---
+- include: collect_info.yml
+
+- name: Install common service
+  include: install.yml
+  when: "ansible_local.common is undefined or common_info.version > ansible_local.common.version"
