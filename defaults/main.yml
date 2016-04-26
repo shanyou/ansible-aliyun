@@ -2,6 +2,7 @@
 # ali ecs always has two disk one for system install and another for data storing
 mount_point: /data
 mount_device: /dev/xvdb
+work_dir: "{{mount_point}}"
 
 # private network interface name
 private_nc: eth0
@@ -9,11 +10,14 @@ private_nc: eth0
 public_nc: eth1
 # enable firewalld
 firewall_enable: true
+# trusted ips list when firewalld enabled
+# trusted_ips:
+#   - x.x.x.x
 
 
 #Optional config
 # internal dns config
-# internal_dns: 10.45.234.162
+#internal_dns: #####
 
 # enable all inventory hosts in /etc/hosts for speedup dns resovler
 # all inventory mast has inner_ip config per host

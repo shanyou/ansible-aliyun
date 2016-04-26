@@ -25,6 +25,7 @@
 
 - name: Creates workdir
   file: path={{work_dir}} state=directory
+  when: work_dir is defined
 
 # the best method is use internal dns for private network access
 - name: remove default hostname in hosts with aliyun defined
@@ -46,7 +47,7 @@
     dest=/etc/hosts
     regexp='.*{{ item }}$'
     line="{{ hostvars[item]['inner_ip']}} {{item}}" state=present
-  with_items: groups['all']
+  with_items: "{{ groups['all'] }}"
   when: enable_hosts
 
 # makesure eth0 zone trusted for firewalld
@@ -85,7 +86,8 @@
   - name: add trusted ips
     command: firewall-cmd --zone=trusted --add-source={{item}}/32 --permanent
     ignore_errors: true
-    with_items: trusted_ips
+    with_items: "{{ trusted_ips }}"
+    when: trusted_ips is defined
 
   - name: add trusted eth0
     command: firewall-cmd --zone=trusted --add-interface=eth0 --permanent
